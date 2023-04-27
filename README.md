@@ -52,3 +52,11 @@ Run the script:
 ```bash
 rosrun picker-demo demo.py
 ```
+
+## Troubleshooting
+
+### If the dynamixel motors fail
+
+```bash
+stretch_robot_dynamixel_reboot.py
+```
