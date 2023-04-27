@@ -17,10 +17,25 @@ r.head.move_to("head_tilt", 0)
 
 time.sleep(3.0)
 
+# r.end_of_arm.move_to("stretch_gripper", 0.0)
+r.end_of_arm.move_to("wrist_pitch", deg_to_rad(0))
+r.end_of_arm.move_to("wrist_roll", deg_to_rad(0))
+r.end_of_arm.move_to("wrist_yaw", deg_to_rad(0))
+
+time.sleep(1.0)
+
+r.end_of_arm.move_to("wrist_pitch", deg_to_rad(45))
+r.end_of_arm.move_to("wrist_roll", deg_to_rad(0))
+r.end_of_arm.move_to("wrist_yaw", deg_to_rad(45))
+
+time.sleep(1.0)
+r.end_of_arm.move_to("wrist_pitch", deg_to_rad(-45))
+
+
 r.head.move_to("head_pan", deg_to_rad(-90.0))
 r.head.move_to("head_tilt", deg_to_rad(-45.0))
 
-time.sleep(3.0)
+time.sleep(1.0)
 
 
 def retract_extend():
@@ -33,12 +48,12 @@ def retract_extend():
     r.arm.wait_until_at_setpoint()
 
 
-retract_extend()
+# retract_extend()
 
-r.end_of_arm.move_to("stretch_gripper", 50)
+# r.end_of_arm.move_to("stretch_gripper", 50)
 
-retract_extend()
-r.end_of_arm.move_to("stretch_gripper", -50)
-retract_extend()
+# retract_extend()
+# r.end_of_arm.move_to("stretch_gripper", -50)
+# retract_extend()
 
 r.stop()
