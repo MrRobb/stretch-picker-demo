@@ -38,6 +38,17 @@ stretch_robot_system_check.py
 stretch_robot_home.py
 ```
 
-
-
 #### Run
+
+Build the package:
+
+```bash
+# On your workspace
+catkin_make && source devel/setup.sh
+```
+
+Run the script:
+
+```bash
+rosrun picker-demo demo.py
+```
