@@ -22,6 +22,7 @@ r.head.move_to("head_tilt", deg_to_rad(-45.0))
 
 time.sleep(3.0)
 
+
 def retract_extend():
     r.arm.move_to(0.0)
     r.push_command()
