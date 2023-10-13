@@ -10,6 +10,7 @@ from sensor_msgs.msg import CameraInfo
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import PointCloud2
 from octomap_msgs.msg import Octomap
+from vision_msgs.msg import Detection2DArray
 
 # from octomap import OcTree
 from cv_bridge import CvBridge
@@ -30,6 +31,7 @@ CAMERA_TOPIC = "/camera/color/image_raw"
 POINT_HEAD_ACTION = "/head_controller/point_head_action"
 OCTOMAP_TOPIC = "/throttle_filtering_points/filtered_points"
 MAX_ITERATIONS = 3
+OUTPUT_TOPIC = "/objects/detected"
 
 # GLOBAL VARIABLES (should not be changed)
 POINT_HEAD_ACTION_CLIENT = None
@@ -38,6 +40,7 @@ CAMERA_INTRINSICS = PinholeCameraModel()
 YOLO_MODEL = torch.hub.load("ultralytics/yolov5", "yolov5s", pretrained=True)
 PARAMETER_SERVER: Optional[Server] = None
 DETECTED_OBJECTS: List[Detection2D] = []
+OUTPUT_PUBLISHER: Optional[rospy.Publisher] = None
 
 
 def build_detection(df: pd.Series, image: Image) -> Detection2D:
@@ -104,14 +107,10 @@ def apply_yolo(image: Image):
         build_detection(row, image) for (_, row) in df_results.iterrows()
     ]
 
-    print(list(df_results["name"]))
-
     return cv_image
 
 
 def image_callback(image: Image):
-    print(image.header.stamp)
-
     # Rotate image 90 degrees
     cv_image = CvBridge().imgmsg_to_cv2(image, "bgr8")
     cv_image = cv2.rotate(cv_image, cv2.ROTATE_90_CLOCKWISE)
@@ -122,7 +121,17 @@ def image_callback(image: Image):
     cv_image = apply_yolo(image=image)
 
     # Save image as PNG
-    cv2.imwrite("image.png", cv_image)  # type: ignore
+    # cv2.imwrite("image.png", cv_image)  # type: ignore
+
+    # Send image to output topic
+    global OUTPUT_PUBLISHER
+    if OUTPUT_PUBLISHER is not None:
+        header = image.header
+        header.stamp = rospy.Time.now()
+        msg = Detection2DArray(header=header, detections=DETECTED_OBJECTS)
+        OUTPUT_PUBLISHER.publish(msg)
+    else:
+        rospy.logerr("Publisher not created")
 
 
 def create_point_head_client():
@@ -169,6 +178,15 @@ def main():
         rospy.loginfo("Point head action client created")
     else:
         rospy.logerr("Point head action client not created")
+
+    # Publisher
+    rospy.loginfo("Creating publisher...")
+    global OUTPUT_PUBLISHER
+    OUTPUT_PUBLISHER = rospy.Publisher(OUTPUT_TOPIC, Detection2DArray, queue_size=1)
+    if OUTPUT_PUBLISHER is not None:
+        rospy.loginfo("Publisher created")
+    else:
+        rospy.logerr("Publisher not created")
 
     rospy.Subscriber(CAMERA_TOPIC, Image, image_callback, queue_size=1)
     rospy.spin()

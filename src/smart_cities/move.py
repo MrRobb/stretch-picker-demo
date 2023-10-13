@@ -309,10 +309,25 @@ print("Looking at arm... ✅")
 # robot_dance()
 
 print("Lifting arm...")
-for _ in range(4):
-    reset_arm()
-    robot_lift("bottle")
+# for _ in range(4):
+#     reset_arm()
+#     robot_lift("bottle")
 print("Lifting arm... ✅")
+
+# Move base to the right
+# r.base.translate_by(0.1) # 10 cm
+# r.push_command()
+# r.base.wait_until_at_setpoint()
+
+# Move base to the right 1cm
+# r.base.translate_by(0.01)
+# r.push_command()
+# r.base.wait_until_at_setpoint()
+
+# Extend arm
+r.arm.move_to(0.5)
+r.push_command()
+r.arm.wait_until_at_setpoint()
 
 # look_ahead()
 # reset_arm()
