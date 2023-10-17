@@ -64,14 +64,14 @@ if __name__ == "__main__":
     print("Initializing ROS node...")
     rospy.init_node("api")
 
-    print("Waiting for 'speak' action server...")
+    rospy.loginfo("Waiting for 'speak' action server...")
     tts_action_client = rospy.ServiceProxy("speak", Speak)
     tts_action_client.wait_for_service()
 
-    # print("Waiting for 'picker' action server...")
+    # rospy.loginfo("Waiting for 'picker' action server...")
     # picker_action_client = rospy.ServiceProxy("picker", Picker)
     # picker_action_client.wait_for_service()
 
-    print("Ready!")
+    rospy.loginfo("Ready!")
 
     app.run(host="0.0.0.0", port=5000, debug=True)

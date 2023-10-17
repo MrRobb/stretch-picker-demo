@@ -23,7 +23,7 @@ def text_to_speech(text: str, language: str = "en"):
 
         # Read audio file
         data, sample_rate = sf.read(temp_file.name)
-        print(data.shape, sample_rate)
+        rospy.logdebug(data.shape, sample_rate)
 
         # Resample audio if necessary
         if sample_rate != 48000:
