@@ -22,7 +22,7 @@ from typing import Optional
 app = Flask(__name__)
 
 tts_action_client: Optional[SimpleActionClient] = None
-picker_action_client = None
+picker_action_client: Optional[SimpleActionClient] = None
 
 
 @app.route("/speak", methods=["POST"])
