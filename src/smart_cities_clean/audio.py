@@ -5,20 +5,64 @@ This module implements the text-to-speech functionality. Using a ROS Action, it 
 """
 
 import rospy
-from actionlib import SimpleActionServer
-from std_msgs.msg import String
+import resampy
+import tempfile
+import soundfile as sf
+import sounddevice as sd
+from gtts import gTTS
+from picker_demo.srv import Speak, SpeakRequest, SpeakResponse
+
+AUDIO_DEVICE = 0
 
 
-def speak(sentence: String):
+def text_to_speech(text: str, language: str = "en"):
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as temp_file:
+        # Create text to speech and save to file
+        tts = gTTS(text=text, lang=language)
+        tts.save(temp_file.name)
+
+        # Read audio file
+        data, sample_rate = sf.read(temp_file.name)
+        print(data.shape, sample_rate)
+
+        # Resample audio if necessary
+        if sample_rate != 48000:
+            data = resampy.resample(data, sample_rate, 48000)
+
+        # Play audio
+        sd.play(data, 48000)
+        sd.wait()
+
+
+def speak(msg: SpeakRequest) -> SpeakResponse:
     """
     This function implements the speak action server. It takes a string and uses the Google Text-to-Speech API to generate an audio file. Then, it uses the audio output device to play the audio file.
     """
-    rospy.loginfo(f"Speaking: {sentence.data}")
+
+    # Set audio device
+    sd.default.device = AUDIO_DEVICE  # type: ignore
+    rospy.loginfo("Device:", AUDIO_DEVICE)
+
+    # Set language
+    language = msg.language if msg.language is not None else "en"
+    rospy.loginfo("Language:", language)
+
+    # Get text
+    rospy.loginfo(f"Speaking: {msg.sentence}")
+    text_to_speech(msg.sentence, language)
+
+    return SpeakResponse(True)
+
 
 if __name__ == "__main__":
-    # Create action server
-    rospy.init_node("tts")
-    server = SimpleActionServer("tts", String, execute_cb=speak)
-    server.start()
-    rospy.spin()
-    
+    # Initialize the ROS node.
+    rospy.loginfo("Starting speak node...")
+    rospy.init_node("speak")
+
+    # Start the action server.
+    rospy.loginfo("Starting speak action server...")
+    server = rospy.Service("speak", Speak, speak)
+
+    # Spin.
+    rospy.loginfo("Speak node ready.")
+    server.spin()

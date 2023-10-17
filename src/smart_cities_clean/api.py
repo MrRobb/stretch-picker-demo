@@ -14,15 +14,16 @@ OUTPUT
 The module calls a ROS service to perform the operation. The module returns a JSON payload with the data from the request.
 """
 
+import rospy
 from flask import Flask, abort, request, jsonify
-from actionlib import SimpleActionClient
-from std_msgs.msg import String
 from typing import Optional
+from picker_demo.srv import Picker, PickerRequest, PickerResponse
+from picker_demo.srv import Speak, SpeakRequest, SpeakResponse
 
 app = Flask(__name__)
 
-tts_action_client: Optional[SimpleActionClient] = None
-picker_action_client: Optional[SimpleActionClient] = None
+tts_action_client: Optional[rospy.ServiceProxy] = None
+picker_action_client: Optional[rospy.ServiceProxy] = None
 
 
 @app.route("/speak", methods=["POST"])
@@ -36,8 +37,7 @@ def speak():
     if not tts_action_client:
         abort(500)
 
-    sentence: String = String(request.json["sentence"])
-    tts_action_client.send_goal(sentence)
+    tts_action_client.call(request.json["sentence"])
 
     return jsonify({"sentence": request.json["sentence"]})
 
@@ -53,22 +53,25 @@ def pick_object():
     if not picker_action_client:
         abort(500)
 
-    object_class: String = String(request.json["object_class"])
-    picker_action_client.send_goal(object_class)
+    picker_action_client.call(request.json["object_class"])
 
     return jsonify({"object_class": request.json["object_class"]})
 
 
 if __name__ == "__main__":
 
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    # Initialize ROS node
+    print("Initializing ROS node...")
+    rospy.init_node("api")
 
     print("Waiting for 'speak' action server...")
-    tts_action_client = SimpleActionClient("speak", String)
-    tts_action_client.wait_for_server()
+    tts_action_client = rospy.ServiceProxy("speak", Speak)
+    tts_action_client.wait_for_service()
 
-    print("Waiting for 'picker' action server...")
-    picker_action_client = SimpleActionClient("picker", String)
-    picker_action_client.wait_for_server()
+    # print("Waiting for 'picker' action server...")
+    # picker_action_client = rospy.ServiceProxy("picker", Picker)
+    # picker_action_client.wait_for_service()
 
     print("Ready!")
+
+    app.run(host="0.0.0.0", port=5000, debug=True)
