@@ -130,7 +130,7 @@ def reset_arm():
 
 def robot_lift(object_class: str):
     pick_object(object_class)
-    flip()
+    # flip()
     # wiggle()
     leave_object()
 
@@ -309,9 +309,8 @@ print("Looking at arm... ✅")
 # robot_dance()
 
 print("Lifting arm...")
-# for _ in range(4):
-#     reset_arm()
-#     robot_lift("bottle")
+reset_arm()
+robot_lift("bottle")
 print("Lifting arm... ✅")
 
 # Move base to the right
@@ -323,11 +322,6 @@ print("Lifting arm... ✅")
 # r.base.translate_by(0.01)
 # r.push_command()
 # r.base.wait_until_at_setpoint()
-
-# Extend arm
-r.arm.move_to(0.5)
-r.push_command()
-r.arm.wait_until_at_setpoint()
 
 # look_ahead()
 # reset_arm()

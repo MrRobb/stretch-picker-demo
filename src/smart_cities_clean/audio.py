@@ -41,11 +41,11 @@ def speak(msg: SpeakRequest) -> SpeakResponse:
 
     # Set audio device
     sd.default.device = AUDIO_DEVICE  # type: ignore
-    rospy.loginfo("Device:", AUDIO_DEVICE)
+    rospy.loginfo(f"Device: {AUDIO_DEVICE}")
 
     # Set language
     language = msg.language if msg.language is not None else "en"
-    rospy.loginfo("Language:", language)
+    rospy.loginfo(f"Language: {language}")
 
     # Get text
     rospy.loginfo(f"Speaking: {msg.sentence}")
