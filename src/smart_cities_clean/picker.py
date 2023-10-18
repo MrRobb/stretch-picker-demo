@@ -15,7 +15,10 @@ Sends the location of the object to the mover module.
 from typing import Dict
 import rospy
 from picker_demo.srv import Picker, PickerRequest, PickerResponse
-from vision_msgs.msg import Detection2DArray, BoundingBox2D
+from vision_msgs.msg import BoundingBox2D
+from visualization_msgs.msg import MarkerArray, Marker
+import tf
+from geometry_msgs.msg import PoseStamped
 
 class_names = {
     0: "person",
@@ -101,17 +104,18 @@ class_names = {
 }
 
 # Constants
-DETECTIONS: Dict[str, BoundingBox2D] = {}
+DETECTIONS: Dict[str, Marker] = {}
 
 
-def detections_callback(msg: Detection2DArray):
-    if msg.detections is None:
+def detections_callback(msg: MarkerArray):
+    if msg.markers is None:
         return
 
-    for detection in msg.detections:
-        if len(detection.results) > 0:
-            rospy.loginfo(f"Location: {detection.bbox}")
-            DETECTIONS[detection.results[0].id] = detection.bbox
+    for marker in msg.markers:
+        rospy.logdebug(f"{marker.text} in {marker.pose}")
+        DETECTIONS[marker.text] = marker
+
+    rospy.loginfo(f"DETECTIONS: {DETECTIONS.keys()}")
 
 
 def pick(msg: PickerRequest) -> PickerResponse:
@@ -123,12 +127,32 @@ def pick(msg: PickerRequest) -> PickerResponse:
     # Search for object in DETECTIONS
     # If object not found, return error
     if msg.object_class not in DETECTIONS:
+        rospy.logerr(f"Object not found: {msg.object_class}")
         return PickerResponse(False)
 
     # If object found, call mover module
     rospy.loginfo(f"Found: {msg.object_class}")
     rospy.loginfo(f"Location: {DETECTIONS[msg.object_class]}")
-    
+
+    # Transform from /camera_color_optical_frame to /link_straight_gripper
+    t = rospy.Time(0)
+    pose = PoseStamped(
+        header=DETECTIONS[msg.object_class].header,
+        pose=DETECTIONS[msg.object_class].pose,
+    )
+
+    listener = tf.TransformListener()
+    t = listener.getLatestCommonTime(
+        "camera_color_optical_frame", "link_straight_gripper"
+    )
+    listener.waitForTransform(
+        "link_straight_gripper",
+        "camera_color_optical_frame",
+        t,
+        rospy.Duration(4),
+    )
+
+    pose_final = listener.transformPose("link_straight_gripper", pose)
 
     # Return success
     return PickerResponse(True)
@@ -142,10 +166,11 @@ if __name__ == "__main__":
     # Create service server
     rospy.loginfo("Creating detections subscriber...")
     detections = rospy.Subscriber(
-        "/objects/detected", Detection2DArray, detections_callback, queue_size=1
+        "/objects/marker_array", MarkerArray, detections_callback, queue_size=1
     )
 
     rospy.loginfo("Creating service server...")
-    picker = rospy.Service("pick", Picker, pick)
+    picker = rospy.Service("picker", Picker, pick)
 
+    rospy.loginfo("Ready!")
     rospy.spin()

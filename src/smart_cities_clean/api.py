@@ -53,6 +53,7 @@ def pick_object():
     if not picker_action_client:
         abort(500)
 
+    
     picker_action_client.call(request.json["object_class"])
 
     return jsonify({"object_class": request.json["object_class"]})
@@ -68,9 +69,9 @@ if __name__ == "__main__":
     tts_action_client = rospy.ServiceProxy("speak", Speak)
     tts_action_client.wait_for_service()
 
-    # rospy.loginfo("Waiting for 'picker' action server...")
-    # picker_action_client = rospy.ServiceProxy("picker", Picker)
-    # picker_action_client.wait_for_service()
+    rospy.loginfo("Waiting for 'picker' action server...")
+    picker_action_client = rospy.ServiceProxy("picker", Picker)
+    picker_action_client.wait_for_service()
 
     rospy.loginfo("Ready!")
 
