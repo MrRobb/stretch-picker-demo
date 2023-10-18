@@ -15,6 +15,7 @@ Sends the location of the object to the mover module.
 from typing import Dict, Optional
 import rospy
 import numpy as np
+import ikpy.chain
 from picker_demo.srv import Picker, PickerRequest, PickerResponse
 from vision_msgs.msg import BoundingBox2D
 from visualization_msgs.msg import MarkerArray, Marker
@@ -156,6 +157,9 @@ def doubt_what_to_pick():
 def look_at_arm():
     r.head.move_to("head_pan", deg_to_rad(-90.0))
     r.head.move_to("head_tilt", deg_to_rad(-45.0))
+
+    # r.head.move_to("head_pan", deg_to_rad(-120.0))
+    # r.head.move_to("head_pan", deg_to_rad(-90.0))
 
     time.sleep(1.0)
 
@@ -377,6 +381,18 @@ def pick(msg: PickerRequest) -> PickerResponse:
     """
     rospy.loginfo(f"Picking: {msg.object_class}")
 
+    # Retract arm
+    r.arm.move_to(0.0)
+    time.sleep(0.1)
+    r.push_command()
+    r.arm.wait_until_at_setpoint()
+
+    # Move to table height
+    r.lift.move_to(TABLE_HEIGHT)
+    time.sleep(0.1)
+    r.push_command()
+    r.lift.wait_until_at_setpoint()
+
     # Search for object in DETECTIONS
     # If object not found, return error
     if msg.object_class not in DETECTIONS:
@@ -422,17 +438,19 @@ def pick(msg: PickerRequest) -> PickerResponse:
     quat = tuple(transformations.quaternion_from_matrix(txpose))
 
     # assemble return value PoseStamped
-    r = PoseStamped()
-    r.header.stamp = detection_msg.header.stamp
-    r.header.frame_id = target_frame
-    r.pose = Pose(Point(*xyz), Quaternion(*quat))
+    rpose = PoseStamped()
+    rpose.header.stamp = detection_msg.header.stamp
+    rpose.header.frame_id = target_frame
+    rpose.pose = Pose(Point(*xyz), Quaternion(*quat))
 
-    rospy.loginfo(f"{r}")
+    rospy.loginfo(
+        f"{rpose.pose.position.x}, {rpose.pose.position.y}, {rpose.pose.position.z}"
+    )
 
     # Publish
     marker = Marker()
 
-    marker.header = r.header
+    marker.header = rpose.header
 
     # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
     marker.type = 2
@@ -450,12 +468,89 @@ def pick(msg: PickerRequest) -> PickerResponse:
     marker.color.a = 1.0
 
     # Set the pose of the marker
-    marker.pose = r.pose
+    marker.pose = rpose.pose
 
     # Publish the marker
-    temp_pub.publish(marker)
+    if temp_pub is not None:
+        temp_pub.publish(marker)
 
     # move(r.pose)
+    # my_chain = ikpy.chain.Chain.from_urdf_file(
+    #     "/home/hello-robot/catkin_ws/src/stretch_ros/stretch_description/urdf/exported_urdf/stretch.urdf"
+    # )
+    # target_vector = [r.pose.position.x, r.pose.position.y, r.pose.position.z]
+    # angles = my_chain.inverse_kinematics(target_vector)
+    # rospy.loginfo(f"Angles: {angles}")
+
+    # Move base
+    r.base.translate_by(rpose.pose.position.x + 0.07)
+    time.sleep(0.1)
+    r.push_command()
+    r.base.wait_until_at_setpoint()
+
+    # Lift
+    r.lift.move_to(rpose.pose.position.y)
+    time.sleep(0.1)
+    r.push_command()
+    r.lift.wait_until_at_setpoint()
+
+    # Rotate wrist
+    r.end_of_arm.move_to("wrist_yaw", deg_to_rad(0))
+    time.sleep(0.1)
+    r.push_command()
+
+    # Open gripper
+    r.end_of_arm.pose("stretch_gripper", "open")
+    time.sleep(0.1)
+    r.push_command()
+    time.sleep(1.0)
+
+    # Extend arm
+    r.arm.move_to(rpose.pose.position.z - 0.13)
+    time.sleep(0.1)
+    r.push_command()
+    r.arm.wait_until_at_setpoint()
+
+    # Close gripper
+    r.end_of_arm.move_to("stretch_gripper", -50)
+    time.sleep(0.1)
+    r.push_command()
+    time.sleep(1.0)
+
+    # Lift
+    r.lift.move_to(rpose.pose.position.y + 0.2)
+    time.sleep(0.1)
+    r.push_command()
+    r.lift.wait_until_at_setpoint()
+
+    # Rotate wrist
+    r.end_of_arm.move_to("wrist_yaw", deg_to_rad(90))
+    time.sleep(0.1)
+    r.push_command()
+
+    # Retract arm
+    r.arm.move_to(0.0)
+    time.sleep(0.1)
+    r.push_command()
+    r.arm.wait_until_at_setpoint()
+
+    # Open gripper
+    r.end_of_arm.pose("stretch_gripper", "open")
+    time.sleep(0.1)
+    r.push_command()
+    time.sleep(1.0)
+
+    # Retract arm
+    r.arm.move_to(0.0)
+    time.sleep(0.1)
+    r.push_command()
+    r.arm.wait_until_at_setpoint()
+
+    # Move to table height
+    r.lift.move_to(TABLE_HEIGHT)
+    time.sleep(0.1)
+    r.push_command()
+    r.lift.wait_until_at_setpoint()
 
     # Return success
     return PickerResponse(True)

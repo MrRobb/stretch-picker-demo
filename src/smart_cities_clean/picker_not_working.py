@@ -453,7 +453,8 @@ def pick(msg: PickerRequest) -> PickerResponse:
     marker.pose = r.pose
 
     # Publish the marker
-    temp_pub.publish(marker)
+    if temp_pub is not None:
+        temp_pub.publish(marker)
 
     # move(r.pose)
 
