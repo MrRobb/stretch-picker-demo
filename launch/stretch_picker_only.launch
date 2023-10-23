@@ -1,0 +1,51 @@
+<launch>
+    <arg name="debug_directory" value="$(env HELLO_FLEET_PATH)/debug/" />
+    <param name="robot_description" textfile="$(find stretch_description)/urdf/stretch.urdf" />
+    <arg name="calibrated_controller_yaml_file"
+        value="$(find stretch_core)/config/controller_calibration_head.yaml" />
+
+    <!-- GUI WITH JOINT SLIDERS -->
+    <!--
+  <node
+      name="joint_state_publisher_gui"
+      pkg="joint_state_publisher_gui"
+      type="joint_state_publisher_gui" >
+    <param name="rate" value="15.0"/>
+    <rosparam param="source_list">
+      [/stretch/joint_states]
+    </rosparam>
+  </node>
+  -->
+
+    <!-- JOINT STATE PUBLISHER -->
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+        <param name="rate" value="30.0" />
+        <rosparam param="source_list">
+            [/stretch/joint_states]
+        </rosparam>
+    </node>
+    <!-- -->
+
+    <!-- ROBOT STATE PUBLISHER -->
+    <node
+        name="robot_state_publisher"
+        pkg="robot_state_publisher"
+        type="robot_state_publisher">
+        <param name="publish_frequency" value="30.0" />
+    </node>
+    <!-- -->
+
+    <!-- STRETCH DRIVER -->
+    <param name="/picker_demo/broadcast_odom_tf" type="bool" value="true" />
+    <param name="/picker_demo/fail_out_of_range_goal" type="bool" value="false" />
+    <node name="picker" pkg="picker_demo" type="picker.py"
+        output="screen">
+        <param name="rate" type="double" value="30.0" />
+        <param name="timeout" type="double" value="0.5" />
+        <remap from="cmd_vel" to="/stretch/cmd_vel" />
+        <remap from="joint_states" to="/stretch/joint_states" />
+        <param name="controller_calibration_file" type="string"
+            value="$(arg calibrated_controller_yaml_file)" />
+    </node>
+    <!-- -->
+</launch>

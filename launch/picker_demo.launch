@@ -37,9 +37,10 @@
   <!-- -->
 
   <!-- STRETCH DRIVER -->
-  <param name="/stretch_driver/broadcast_odom_tf" type="bool" value="true" />
-  <param name="/stretch_driver/fail_out_of_range_goal" type="bool" value="false" />
-  <node name="stretch_driver" pkg="stretch_core" type="stretch_driver" output="screen">
+  <param name="/picker_demo/broadcast_odom_tf" type="bool" value="true" />
+  <param name="/picker_demo/fail_out_of_range_goal" type="bool" value="false" />
+  <node name="picker" pkg="picker_demo" type="picker.py"
+    output="screen">
     <param name="rate" type="double" value="30.0" />
     <param name="timeout" type="double" value="0.5" />
     <remap from="cmd_vel" to="/stretch/cmd_vel" />

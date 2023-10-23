@@ -9,7 +9,7 @@ from control_msgs.msg import FollowJointTrajectoryFeedback
 from control_msgs.msg import FollowJointTrajectoryResult
 from trajectory_msgs.msg import JointTrajectoryPoint
 
-from picker.command_groups import (
+from command_groups import (
     HeadPanCommandGroup,
     HeadTiltCommandGroup,
     WristYawCommandGroup,

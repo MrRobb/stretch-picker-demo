@@ -14,6 +14,7 @@ Sends the location of the object to the mover module.
 
 from typing import Dict, Optional
 import rospy
+import yaml
 import tf_conversions
 import numpy as np
 import ikpy.chain
@@ -44,11 +45,100 @@ from control_msgs.msg import FollowJointTrajectoryAction
 from control_msgs.msg import FollowJointTrajectoryFeedback
 from control_msgs.msg import FollowJointTrajectoryResult
 from trajectory_msgs.msg import JointTrajectoryPoint
-from picker.joint_trajectory_server import JointTrajectoryAction
+from joint_trajectory_server import JointTrajectoryAction
 
 
 class StretchStatePublisher:
-    def __init__(self):
+    def __init__(self, robot: stretch_body.robot.Robot):
+        self.robot = robot
+
+        large_ang = np.radians(45.0)
+        filename = rospy.get_param("~controller_calibration_file")
+        rospy.loginfo(
+            "Loading controller calibration parameters for the head from YAML file named {0}".format(
+                filename
+            )
+        )
+        with open(str(filename), "r") as fid:
+            self.controller_parameters = yaml.safe_load(fid)
+            rospy.loginfo(
+                "controller parameters loaded = {0}".format(self.controller_parameters)
+            )
+
+            head_tilt_calibrated_offset_rad = self.controller_parameters[
+                "tilt_angle_offset"
+            ]
+            if abs(head_tilt_calibrated_offset_rad) > large_ang:
+                rospy.logwarn(
+                    "WARNING: head_tilt_calibrated_offset_rad HAS AN UNUSUALLY LARGE MAGNITUDE"
+                )
+            rospy.loginfo(
+                "head_tilt_calibrated_offset_rad in degrees = {0}".format(
+                    np.degrees(head_tilt_calibrated_offset_rad)
+                )
+            )
+
+            head_pan_calibrated_offset_rad = self.controller_parameters[
+                "pan_angle_offset"
+            ]
+            if abs(head_pan_calibrated_offset_rad) > large_ang:
+                rospy.logwarn(
+                    "WARNING: head_pan_calibrated_offset_rad HAS AN UNUSUALLY LARGE MAGNITUDE"
+                )
+            rospy.loginfo(
+                "head_pan_calibrated_offset_rad in degrees = {0}".format(
+                    np.degrees(head_pan_calibrated_offset_rad)
+                )
+            )
+
+            head_pan_calibrated_looked_left_offset_rad = self.controller_parameters[
+                "pan_looked_left_offset"
+            ]
+            if abs(head_pan_calibrated_looked_left_offset_rad) > large_ang:
+                rospy.logwarn(
+                    "WARNING: head_pan_calibrated_looked_left_offset_rad HAS AN UNUSUALLY LARGE MAGNITUDE"
+                )
+            rospy.loginfo(
+                "head_pan_calibrated_looked_left_offset_rad in degrees = {0}".format(
+                    np.degrees(head_pan_calibrated_looked_left_offset_rad)
+                )
+            )
+
+            head_tilt_backlash_transition_angle_rad = self.controller_parameters[
+                "tilt_angle_backlash_transition"
+            ]
+            rospy.loginfo(
+                "head_tilt_backlash_transition_angle_rad in degrees = {0}".format(
+                    np.degrees(head_tilt_backlash_transition_angle_rad)
+                )
+            )
+
+            head_tilt_calibrated_looking_up_offset_rad = self.controller_parameters[
+                "tilt_looking_up_offset"
+            ]
+            if abs(head_tilt_calibrated_looking_up_offset_rad) > large_ang:
+                rospy.logwarn(
+                    "WARNING: head_tilt_calibrated_looking_up_offset_rad HAS AN UNUSUALLY LARGE MAGNITUDE"
+                )
+            rospy.loginfo(
+                "head_tilt_calibrated_looking_up_offset_rad in degrees = {0}".format(
+                    np.degrees(head_tilt_calibrated_looking_up_offset_rad)
+                )
+            )
+
+            arm_calibrated_retracted_offset_m = self.controller_parameters[
+                "arm_retracted_offset"
+            ]
+            if abs(arm_calibrated_retracted_offset_m) > 0.05:
+                rospy.logwarn(
+                    "WARNING: arm_calibrated_retracted_offset_m HAS AN UNUSUALLY LARGE MAGNITUDE"
+                )
+            rospy.loginfo(
+                "arm_calibrated_retracted_offset_m in meters = {0}".format(
+                    arm_calibrated_retracted_offset_m
+                )
+            )
+
         self.broadcast_odom_tf = rospy.get_param("~broadcast_odom_tf", False)
         rospy.loginfo("broadcast_odom_tf = " + str(self.broadcast_odom_tf))
 
@@ -87,7 +177,7 @@ class StretchStatePublisher:
 
         self.robot_mode = "position"
 
-    def publish(self, robot: stretch_body.robot.Robot):
+    def publish(self):
         # TODO: Add rwlock
 
         # TODO: In the future, consider using time stamps from the robot's
@@ -96,7 +186,7 @@ class StretchStatePublisher:
         # robot_time = robot_status['timestamp_pc']
         # current_time = rospy.Time.from_sec(robot_time)
         current_time = rospy.Time.now()
-        robot_status = robot.get_status()
+        robot_status = self.robot.get_status()
 
         ##################################################
         # obtain odometry
@@ -142,7 +232,7 @@ class StretchStatePublisher:
 
         ##################################################
         # obstain battery state
-        pimu_hardware_id = robot.pimu.board_info["hardware_id"]
+        pimu_hardware_id = self.robot.pimu.board_info["hardware_id"]
         invalid_reading = float("NaN")
         v = float(robot_status["pimu"]["voltage"])
         self.voltage_history.append(v)
@@ -221,7 +311,7 @@ class StretchStatePublisher:
         ##################################################
         # publish homed status
         calibration_status = Bool()
-        calibration_status.data = robot.is_calibrated()
+        calibration_status.data = self.robot.is_calibrated()
         self.calibration_pub.publish(calibration_status)
         self.homed_pub.publish(calibration_status)
 
@@ -237,7 +327,7 @@ class StretchStatePublisher:
 
         # publish end of arm tool
         tool_msg = String()
-        tool_msg.data = robot.end_of_arm.name
+        tool_msg.data = self.robot.end_of_arm.name
         self.tool_pub.publish(tool_msg)
 
         ##################################################
@@ -342,7 +432,7 @@ class StretchPicker:
     DETECTIONS: Dict[str, Marker] = {}
     temp_pub: Optional[rospy.Publisher] = None
     # Constants
-    TABLE_HEIGHT = 0.4
+    TABLE_HEIGHT = 0.7
     OBJECT_STRENGTH = {
         "bottle": -50,
         "remote": -50,
@@ -370,7 +460,7 @@ class StretchPicker:
         self.node_name = "picker"
 
         # Set state manager
-        self.state_manager = StretchStatePublisher()
+        self.state_manager = StretchStatePublisher(self.r)
 
     #############################
     #       ROBOT ACTIONS       #
@@ -495,7 +585,7 @@ class StretchPicker:
     #############################
 
     def publish_state(self):
-        self.state_manager.publish(self.r)
+        self.state_manager.publish()
 
     #############################
     #       ROS CALLBACKS       #
@@ -510,8 +600,6 @@ class StretchPicker:
             for marker in msg.markers
             if abs(marker.scale.x) >= 0.01 and abs(marker.scale.y) >= 0.01
         ]
-
-        self.DETECTIONS.clear()
 
         for marker in markers:
             self.DETECTIONS[marker.text] = marker
@@ -547,13 +635,13 @@ class StretchPicker:
         x = self.DETECTIONS[msg.object_class].pose.position.x
         y = self.DETECTIONS[msg.object_class].pose.position.y
         z = self.DETECTIONS[msg.object_class].pose.position.z
-        rospy.loginfo(f"Location: {x}, {y}, {z}")
+        rospy.loginfo(f"Original Location: {x}, {y}, {z}")
 
         # Transform from /camera_color_optical_frame to /link_grasp_center
         detection_msg = self.DETECTIONS[msg.object_class]
         # rospy.loginfo(f"Detection: {detection_msg}")
 
-        target_frame = "link_grasp_center"
+        target_frame = "link_lift"
 
         listener = tf.TransformListener()
         listener.waitForTransform(
@@ -587,9 +675,10 @@ class StretchPicker:
         rpose.header.frame_id = target_frame
         rpose.pose = Pose(Point(*xyz), Quaternion(*quat))
 
-        rospy.loginfo(
-            f"{rpose.pose.position.x}, {rpose.pose.position.y}, {rpose.pose.position.z}"
-        )
+        x = rpose.pose.position.x
+        y = rpose.pose.position.y
+        z = rpose.pose.position.z
+        rospy.loginfo(f"Transformed Location: {x}, {y}, {z}")
 
         # Publish
         marker = Marker()
@@ -627,95 +716,93 @@ class StretchPicker:
         # rospy.loginfo(f"Angles: {angles}")
 
         # Move base
-        self.r.base.translate_by(rpose.pose.position.y + 0.07)
+        self.r.base.translate_by(-rpose.pose.position.y + 0.07)
         time.sleep(0.1)
         self.r.push_command()
         self.r.base.wait_until_at_setpoint()
 
-        # Lift
-        self.r.lift.move_to(rpose.pose.position.z - 0.13)
-        time.sleep(0.1)
-        self.r.push_command()
-        self.r.lift.wait_until_at_setpoint()
+        # # Lift
+        # self.r.lift.move_by(rpose.pose.position.y)
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # self.r.lift.wait_until_at_setpoint()
 
-        # Rotate wrist
-        self.r.end_of_arm.move_to("wrist_yaw", deg_to_rad(0))
-        time.sleep(0.1)
-        self.r.push_command()
+        # # Rotate wrist
+        # self.r.end_of_arm.move_to("wrist_yaw", deg_to_rad(0))
+        # time.sleep(0.1)
+        # self.r.push_command()
 
-        # Open gripper
-        self.r.end_of_arm.pose("stretch_gripper", "open")
-        time.sleep(0.1)
-        self.r.push_command()
-        time.sleep(1.0)
+        # # Open gripper
+        # self.r.end_of_arm.pose("stretch_gripper", "open")
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # time.sleep(1.0)
 
-        # Extend arm
-        self.r.arm.move_to(rpose.pose.position.x)
-        time.sleep(0.1)
-        self.r.push_command()
-        self.r.arm.wait_until_at_setpoint()
+        # # Extend arm
+        # self.r.arm.move_by(-rpose.pose.position.x - 0.23)
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # self.r.arm.wait_until_at_setpoint()
 
-        # Close gripper
-        self.r.end_of_arm.move_to("stretch_gripper", -50)
-        time.sleep(0.1)
-        self.r.push_command()
-        time.sleep(1.0)
+        # # Close gripper
+        # self.r.end_of_arm.move_to("stretch_gripper", -50)
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # time.sleep(1.0)
 
-        # Lift
-        self.r.lift.move_to(rpose.pose.position.z + 0.2)
-        time.sleep(0.1)
-        self.r.push_command()
-        self.r.lift.wait_until_at_setpoint()
+        # # Lift
+        # self.r.lift.move_to(self.TABLE_HEIGHT + 0.2)
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # self.r.lift.wait_until_at_setpoint()
 
-        # Rotate wrist
-        self.r.end_of_arm.move_to("wrist_yaw", deg_to_rad(90))
-        time.sleep(0.1)
-        self.r.push_command()
+        # # Rotate wrist
+        # self.r.end_of_arm.move_to("wrist_yaw", deg_to_rad(90))
+        # time.sleep(0.1)
+        # self.r.push_command()
 
-        # Retract arm
-        self.r.arm.move_to(0.0)
-        time.sleep(0.1)
-        self.r.push_command()
-        self.r.arm.wait_until_at_setpoint()
+        # # Retract arm
+        # self.r.arm.move_to(0.0)
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # self.r.arm.wait_until_at_setpoint()
 
-        # Open gripper
-        self.r.end_of_arm.pose("stretch_gripper", "open")
-        time.sleep(0.1)
-        self.r.push_command()
-        time.sleep(1.0)
+        # # Open gripper
+        # self.r.end_of_arm.pose("stretch_gripper", "open")
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # time.sleep(1.0)
 
-        # Retract arm
-        self.r.arm.move_to(0.0)
-        time.sleep(0.1)
-        self.r.push_command()
-        self.r.arm.wait_until_at_setpoint()
+        # # Retract arm
+        # self.r.arm.move_to(0.0)
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # self.r.arm.wait_until_at_setpoint()
 
-        # Move to table height
-        self.r.lift.move_to(self.TABLE_HEIGHT)
-        time.sleep(0.1)
-        self.r.push_command()
-        self.r.lift.wait_until_at_setpoint()
+        # # Move to table height
+        # self.r.lift.move_to(self.TABLE_HEIGHT)
+        # time.sleep(0.1)
+        # self.r.push_command()
+        # self.r.lift.wait_until_at_setpoint()
+
+        self.reset_arm()
 
         # Return success
         return PickerResponse(True)
 
     def main(self):
-        # Initialize the ROS node.
-        rospy.loginfo("Starting pick node...")
-        rospy.init_node(self.node_name)
-
         # Create temporal publisher
         rospy.loginfo("Creating temporal publisher...")
-        temp_pub = rospy.Publisher("/temp", Marker, queue_size=1)
+        self.temp_pub = rospy.Publisher("/temp", Marker, queue_size=1)
 
         # Create service server
         rospy.loginfo("Creating detections subscriber...")
-        detections = rospy.Subscriber(
+        rospy.Subscriber(
             "/objects/marker_array", MarkerArray, self.detections_callback, queue_size=1
         )
 
         print("Resetting arm...")
-        # reset_arm()
+        self.reset_arm()
         print("Resetting arm... ✅")
 
         print("Looking at arm...")
@@ -756,3 +843,11 @@ class StretchPicker:
         except (rospy.ROSInterruptException, ThreadServiceExit):
             self.r.stop()
             rospy.signal_shutdown("stretch_driver shutdown")
+
+
+if __name__ == "__main__":
+    # Initialize the ROS node.
+    rospy.loginfo("Starting pick node...")
+    rospy.init_node("picker")
+    picker = StretchPicker()
+    picker.main()
