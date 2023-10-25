@@ -33,18 +33,7 @@ from tf.listener import xyz_to_mat44, xyzw_to_mat44, transformations
 from sensor_msgs.msg import BatteryState, JointState, Imu, MagneticField
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String
-
-
-#! /usr/bin/env python3
-
-import importlib
-
 import rospy
-import actionlib
-from control_msgs.msg import FollowJointTrajectoryAction
-from control_msgs.msg import FollowJointTrajectoryFeedback
-from control_msgs.msg import FollowJointTrajectoryResult
-from trajectory_msgs.msg import JointTrajectoryPoint
 from joint_trajectory_server import JointTrajectoryAction
 
 
@@ -458,9 +447,70 @@ class StretchPicker:
 
         # Set node name
         self.node_name = "picker"
+        self.target_frame = "link_gripper"
+        self.source_frame = "camera_color_optical_frame"
 
         # Set state manager
         self.state_manager = StretchStatePublisher(self.r)
+
+        # TF Listener
+        self.listener = tf.TransformListener()
+        self.listener.waitForTransform(
+            self.target_frame,
+            self.source_frame,
+            rospy.Time(),
+            rospy.Duration(4),
+        )
+
+    #############################
+    #       TF FUNCTIONS        #
+    #############################
+
+    def transform(self, pose: Pose) -> Pose:
+
+        (trans, rot) = self.listener.lookupTransform(
+            self.target_frame, self.source_frame, rospy.Time(0)
+        )
+
+        mat44 = self.listener.fromTranslationRotation(trans, rot)
+
+        # pose44 is the given pose as a 4x4
+        pose44 = np.dot(
+            xyz_to_mat44(pose.position),
+            xyzw_to_mat44(pose.orientation),
+        )
+
+        # txpose is the new pose in target_frame as a 4x4
+        txpose = np.dot(mat44, pose44)
+
+        # xyz and quat are txpose's position and orientation
+        xyz = tuple(transformations.translation_from_matrix(txpose))[:3]
+        quat = tuple(transformations.quaternion_from_matrix(txpose))
+
+        return Pose(Point(*xyz), Quaternion(*quat))
+
+    def publish_pose(self, pose: Pose):
+        marker = Marker()
+
+        marker.header.frame_id = self.target_frame
+        marker.header.stamp = rospy.Time.now()
+
+        marker.type = 2
+        marker.id = 0
+
+        marker.pose = pose
+
+        marker.scale.x = 0.1
+        marker.scale.y = 0.1
+        marker.scale.z = 0.1
+
+        marker.color.a = 1.0
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+
+        if self.temp_pub is not None:
+            self.temp_pub.publish(marker)
 
     #############################
     #       ROBOT ACTIONS       #
@@ -603,6 +653,8 @@ class StretchPicker:
 
         for marker in markers:
             self.DETECTIONS[marker.text] = marker
+            if marker.text == "cup":
+                self.publish_pose(self.transform(marker.pose))
 
         rospy.loginfo(f"DETECTIONS: {[ key for key in self.DETECTIONS.keys() ]}")
 
@@ -641,71 +693,21 @@ class StretchPicker:
         detection_msg = self.DETECTIONS[msg.object_class]
         # rospy.loginfo(f"Detection: {detection_msg}")
 
-        target_frame = "link_lift"
-
-        listener = tf.TransformListener()
-        listener.waitForTransform(
-            target_frame,
-            detection_msg.header.frame_id,
-            rospy.Time(),
-            rospy.Duration(4),
-        )
-        (trans, rot) = listener.lookupTransform(
-            target_frame, detection_msg.header.frame_id, rospy.Time(0)
-        )
-
-        mat44 = listener.fromTranslationRotation(trans, rot)
-
-        # pose44 is the given pose as a 4x4
-        pose44 = np.dot(
-            xyz_to_mat44(detection_msg.pose.position),
-            xyzw_to_mat44(detection_msg.pose.orientation),
-        )
-
-        # txpose is the new pose in target_frame as a 4x4
-        txpose = np.dot(mat44, pose44)
-
-        # xyz and quat are txpose's position and orientation
-        xyz = tuple(transformations.translation_from_matrix(txpose))[:3]
-        quat = tuple(transformations.quaternion_from_matrix(txpose))
+        assert detection_msg.header.frame_id == self.source_frame
 
         # assemble return value PoseStamped
         rpose = PoseStamped()
         rpose.header.stamp = detection_msg.header.stamp
-        rpose.header.frame_id = target_frame
-        rpose.pose = Pose(Point(*xyz), Quaternion(*quat))
+        rpose.header.frame_id = self.target_frame
+        rpose.pose = self.transform(detection_msg.pose)
 
         x = rpose.pose.position.x
         y = rpose.pose.position.y
         z = rpose.pose.position.z
         rospy.loginfo(f"Transformed Location: {x}, {y}, {z}")
 
-        # Publish
-        marker = Marker()
-
-        marker.header = rpose.header
-
-        # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
-        marker.type = 2
-        marker.id = 0
-
-        # Set the scale of the marker
-        marker.scale.x = 0.01
-        marker.scale.y = 0.01
-        marker.scale.z = 0.01
-
-        # Set the color
-        marker.color.r = 0.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
-        marker.color.a = 1.0
-
-        # Set the pose of the marker
-        marker.pose = rpose.pose
-
-        # Publish the marker
-        if self.temp_pub is not None:
-            self.temp_pub.publish(marker)
+        # Publish pose
+        self.publish_pose(rpose.pose)
 
         # move(r.pose)
         # my_chain = ikpy.chain.Chain.from_urdf_file(
@@ -716,33 +718,33 @@ class StretchPicker:
         # rospy.loginfo(f"Angles: {angles}")
 
         # Move base
-        self.r.base.translate_by(-rpose.pose.position.y + 0.07)
+        self.r.base.translate_by(-rpose.pose.position.y + 0.072)
         time.sleep(0.1)
         self.r.push_command()
         self.r.base.wait_until_at_setpoint()
 
-        # # Lift
-        # self.r.lift.move_by(rpose.pose.position.y)
-        # time.sleep(0.1)
-        # self.r.push_command()
-        # self.r.lift.wait_until_at_setpoint()
+        # Lift
+        self.r.lift.move_by(rpose.pose.position.z + 0.05)
+        time.sleep(0.1)
+        self.r.push_command()
+        self.r.lift.wait_until_at_setpoint()
 
-        # # Rotate wrist
-        # self.r.end_of_arm.move_to("wrist_yaw", deg_to_rad(0))
-        # time.sleep(0.1)
-        # self.r.push_command()
+        # Rotate wrist
+        self.r.end_of_arm.move_to("wrist_yaw", deg_to_rad(0))
+        time.sleep(0.1)
+        self.r.push_command()
 
-        # # Open gripper
-        # self.r.end_of_arm.pose("stretch_gripper", "open")
-        # time.sleep(0.1)
-        # self.r.push_command()
-        # time.sleep(1.0)
+        # Open gripper
+        self.r.end_of_arm.pose("stretch_gripper", "open")
+        time.sleep(0.1)
+        self.r.push_command()
+        time.sleep(1.0)
 
-        # # Extend arm
-        # self.r.arm.move_by(-rpose.pose.position.x - 0.23)
-        # time.sleep(0.1)
-        # self.r.push_command()
-        # self.r.arm.wait_until_at_setpoint()
+        # Extend arm
+        self.r.arm.move_by(-rpose.pose.position.x - 0.23)
+        time.sleep(0.1)
+        self.r.push_command()
+        self.r.arm.wait_until_at_setpoint()
 
         # # Close gripper
         # self.r.end_of_arm.move_to("stretch_gripper", -50)
