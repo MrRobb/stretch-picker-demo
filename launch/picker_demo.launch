@@ -80,4 +80,18 @@
     args="-d $(find stretch_deep_perception)/rviz/object_detection.rviz" />
   <!-- -->
 
+  <!-- AUDIO SPEAKER -->
+  <node name="audio" pkg="picker_demo" type="audio.py"
+    output="screen">
+    <param name="debug_directory" type="string" value="$(arg debug_directory)" />
+  </node>
+  <!-- -->
+
+  <!-- API -->
+  <node name="api" pkg="picker_demo" type="api.py"
+    output="screen">
+    <param name="debug_directory" type="string" value="$(arg debug_directory)" />
+  </node>
+  <!-- -->
+
 </launch>

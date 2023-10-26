@@ -741,22 +741,28 @@ class StretchPicker:
         time.sleep(1.0)
 
         # Extend arm
-        self.r.arm.move_by(-rpose.pose.position.x - 0.23)
+        self.r.arm.move_by(-rpose.pose.position.x - 0.2)
         time.sleep(0.1)
         self.r.push_command()
         self.r.arm.wait_until_at_setpoint()
 
-        # # Close gripper
-        # self.r.end_of_arm.move_to("stretch_gripper", -50)
-        # time.sleep(0.1)
-        # self.r.push_command()
-        # time.sleep(1.0)
+        # Close gripper
+        self.r.end_of_arm.move_to("stretch_gripper", -50)
+        time.sleep(0.1)
+        self.r.push_command()
+        time.sleep(1.0)
 
-        # # Lift
-        # self.r.lift.move_to(self.TABLE_HEIGHT + 0.2)
-        # time.sleep(0.1)
-        # self.r.push_command()
-        # self.r.lift.wait_until_at_setpoint()
+        # Lift up
+        self.r.lift.move_by(0.2)
+        time.sleep(0.1)
+        self.r.push_command()
+        self.r.lift.wait_until_at_setpoint()
+
+        # Lift down
+        self.r.lift.move_by(-0.2)
+        time.sleep(0.1)
+        self.r.push_command()
+        self.r.lift.wait_until_at_setpoint()
 
         # # Rotate wrist
         # self.r.end_of_arm.move_to("wrist_yaw", deg_to_rad(90))
@@ -769,11 +775,11 @@ class StretchPicker:
         # self.r.push_command()
         # self.r.arm.wait_until_at_setpoint()
 
-        # # Open gripper
-        # self.r.end_of_arm.pose("stretch_gripper", "open")
-        # time.sleep(0.1)
-        # self.r.push_command()
-        # time.sleep(1.0)
+        # Open gripper
+        self.r.end_of_arm.pose("stretch_gripper", "open")
+        time.sleep(0.1)
+        self.r.push_command()
+        time.sleep(1.0)
 
         # # Retract arm
         # self.r.arm.move_to(0.0)
@@ -837,7 +843,7 @@ class StretchPicker:
             # odometry, and publish joint states
             while not rospy.is_shutdown():
                 self.r.non_dxl_thread.step()
-                self.r.pimu.set_fan_on()
+                # self.r.pimu.set_fan_on()
                 self.publish_state()
                 self.r.push_command()
                 self.dirty_command = False
