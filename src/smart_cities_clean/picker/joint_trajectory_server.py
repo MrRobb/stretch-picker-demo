@@ -275,8 +275,8 @@ class JointTrajectoryAction:
         actual_point = JointTrajectoryPoint()
         error_point = JointTrajectoryPoint()
         for i, commanded_joint_name in enumerate(commanded_joint_names):
-            error_point.positions.append(clean_named_errors_dict[commanded_joint_name])
-            actual_point.positions.append(
+            error_point.positions.append(clean_named_errors_dict[commanded_joint_name])  # type: ignore
+            actual_point.positions.append(  # type: ignore
                 desired_point.positions[i]
                 - clean_named_errors_dict[commanded_joint_name]
             )
