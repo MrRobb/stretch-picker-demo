@@ -42,6 +42,10 @@ class StretchPicker:
         "bottle": -10,
         "remote": -20,
     }
+    object_calibration = {
+        "bottle": Point(0.03, 0.0, 0.0),
+        "banana": Point(0.0, 0.0, 0.0),
+    }
 
     #############################
     #       INITIALIZER         #
@@ -325,12 +329,17 @@ class StretchPicker:
         transformed_pose = self.transform(detection_msg.pose)
         self.publish_pose(transformed_pose)
 
-        # Calibrated pose
+        # Add calibrated pose (camera perspective)
         calibrated_pose = self.calibrate(transformed_pose)
 
         y_base_inc = -calibrated_pose.position.y + 0.072
         z_lift_inc = calibrated_pose.position.z + 0.05 + 0.075
         x_extend_inc = -calibrated_pose.position.x - 0.2
+
+        if msg.object_class in self.object_calibration:
+            y_base_inc += self.object_calibration[msg.object_class].y
+            z_lift_inc += self.object_calibration[msg.object_class].z
+            x_extend_inc += self.object_calibration[msg.object_class].x
 
         # Move base
         self.r.base.translate_by(y_base_inc)
@@ -355,16 +364,16 @@ class StretchPicker:
         self.r.push_command()
         time.sleep(1.0)
 
-        # Move wrist down
-        self.r.end_of_arm.move_to("wrist_pitch", math.radians(-20))
-        time.sleep(0.1)
-        self.r.push_command()
-
         # Extend arm
         self.r.arm.move_by(x_extend_inc)
         time.sleep(0.1)
         self.r.push_command()
         self.r.arm.wait_until_at_setpoint()
+
+        # Move wrist down
+        self.r.end_of_arm.move_to("wrist_pitch", math.radians(-20))
+        time.sleep(0.1)
+        self.r.push_command()
 
         # Close gripper
         self.r.end_of_arm.move_to("stretch_gripper", -50)
@@ -379,7 +388,7 @@ class StretchPicker:
         self.r.lift.wait_until_at_setpoint()
 
         # Rotate wrist
-        self.r.end_of_arm.move_to("wrist_yaw", math.radians(-90))
+        self.r.end_of_arm.move_to("wrist_yaw", math.radians(90))
         time.sleep(0.1)
         self.r.push_command()
 
@@ -422,6 +431,10 @@ class StretchPicker:
         # Create temporal publisher
         rospy.loginfo("Creating temporal publisher...")
         self.temp_pub = rospy.Publisher("/temp", Marker, queue_size=1)
+
+        # Create move_to publisher
+        rospy.loginfo("Creating move_to publisher...")
+        self.mover = rospy.Publisher("/move_to", Point, queue_size=1)
 
         # Create service server
         rospy.loginfo("Creating detections subscriber...")

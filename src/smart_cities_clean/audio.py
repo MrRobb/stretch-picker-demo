@@ -4,6 +4,7 @@
 This module implements the text-to-speech functionality. Using a ROS Action, it implements the speak action server. The action server takes a string and uses the Google Text-to-Speech API to generate an audio file. Then, it uses the audio output device to play the audio file.
 """
 
+import time
 import rospy
 import resampy
 import tempfile
@@ -20,18 +21,36 @@ def text_to_speech(text: str, language: str = "en"):
         # Create text to speech and save to file
         tts = gTTS(text=text, lang=language)
         tts.save(temp_file.name)
+        
+        start = time.time()
 
         # Read audio file
         data, sample_rate = sf.read(temp_file.name)
         rospy.logdebug(data.shape, sample_rate)
 
+        # Print time to read audio file
+        end = time.time()
+        rospy.loginfo(f"Time to read audio file: {end - start}")
+
+        start = time.time()
+
         # Resample audio if necessary
         if sample_rate != 48000:
             data = resampy.resample(data, sample_rate, 48000)
 
+        # Print time to resample audio
+        end = time.time()
+        rospy.loginfo(f"Time to resample audio: {end - start}")
+
+        start = time.time()
+
         # Play audio
         sd.play(data, 48000)
         sd.wait()
+
+        # Print time to play audio
+        end = time.time()
+        rospy.loginfo(f"Time to play audio: {end - start}")
 
 
 def speak(msg: SpeakRequest) -> SpeakResponse:
